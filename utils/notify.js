@@ -1,7 +1,11 @@
 import nodemailer from "nodemailer";
 import axios from "axios";
 import env from "./env.js";
-import pkg from "../package.json" assert { type: "json" };
+import { readFileSync } from "fs";
+
+const pkg = JSON.parse(
+  readFileSync(new URL("../package.json", import.meta.url), "utf8")
+);
 
 export class Notify {
   /**
