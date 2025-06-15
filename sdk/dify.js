@@ -1,4 +1,3 @@
-import axios from "axios";
 export const BASE_URL = "https://api.dify.ai/v1";
 
 export const routes = {
@@ -110,29 +109,52 @@ export class DifyClient {
       ...headerParams
     };
 
-    const url = `${this.baseUrl}${endpoint}`;
-    let response;
-    if (stream) {
-      response = await axios({
-        method,
-        url,
-        data,
-        params,
-        headers,
-        responseType: "stream",
+    let url = `${this.baseUrl}${endpoint}`;
+    
+    if (params) {
+      const urlParams = new URLSearchParams();
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== null && value !== undefined) {
+          urlParams.append(key, value);
+        }
       });
-    } else {
-      response = await axios({
-        method,
-        url,
-        ...(method !== "GET" && { data }),
-        params,
-        headers,
-        responseType: "json",
-      });
+      if (urlParams.toString()) {
+        url += `?${urlParams.toString()}`;
+      }
     }
 
-    return response;
+    const fetchOptions = {
+      method,
+      headers,
+    };
+
+    if (method !== "GET" && data) {
+      if (headers["Content-Type"] === "multipart/form-data") {
+        delete fetchOptions.headers["Content-Type"];
+        fetchOptions.body = data;
+      } else {
+        fetchOptions.body = JSON.stringify(data);
+      }
+    }
+
+    const response = await fetch(url, fetchOptions);
+    
+    if (stream) {
+      return {
+        data: response,
+        status: response.status,
+        statusText: response.statusText,
+        headers: response.headers,
+      };
+    } else {
+      const responseWrapper = {
+        data: await response.json(),
+        status: response.status,
+        statusText: response.statusText,
+        headers: response.headers,
+      };
+      return responseWrapper;
+    }
   }
 
   messageFeedback(message_id, rating, user) {
@@ -391,17 +413,43 @@ export class WorkflowClient extends DifyClient {
           return String.fromCharCode(parseInt(p1, 16))
         })
       }
-    const asyncSSE = (stream) => {
-        return new Promise((resolve, reject) => {
+    const asyncSSE = (response) => {
+        return new Promise(async (resolve) => {
           let task_id = ''
+          let buffer = ''
+          
           try {
-            stream.on('data', data => {
-              const streams = new TextDecoder('utf-8').decode(data, { stream: true }).split('\n')
-              streams.forEach(stream => {
-                if (stream && stream.startsWith('data: ')) {
+            const reader = response.body.getReader()
+            const decoder = new TextDecoder('utf-8')
+            
+            while (true) {
+              const { done, value } = await reader.read()
+              
+              if (done) {
+                const { data } = task_id ? await this.result(task_id) : { data: { outputs: '' } }
+                console.log('获取工作流执行结果', task_id, JSON.stringify(data.outputs))
+                let outputs = {}
+                if(data.outputs) {
+                    try {
+                      outputs = JSON.parse(data.outputs)
+                    } catch (error) {
+                      console.log(`获取工作流执行结果,失败:${error}`)
+                    }
+                }
+                resolve({ text: outputs?.text, task_id: task_id })
+                break
+              }
+              
+              buffer += decoder.decode(value, { stream: true })
+              
+              const lines = buffer.split('\n')
+              buffer = lines.pop() || ''
+              
+              lines.forEach(line => {
+                if (line && line.startsWith('data: ')) {
                   let res = {}
                   try {
-                    res = JSON.parse(stream.substring(6)) || {}
+                    res = JSON.parse(line.substring(6)) || {}
                   } catch (e) {
                     return
                   }
@@ -424,22 +472,7 @@ export class WorkflowClient extends DifyClient {
                   }
                 }
               })
-            })
-            stream.on('end', async () => {
-
-              const { data } = task_id ? await this.result(task_id) : { data: { outputs: '' } }
-              console.log('获取工作流执行结果', task_id, JSON.stringify(data.outputs))
-              let outputs = {}
-              if(data.outputs) {
-                  try {
-                    outputs = JSON.parse(data.outputs)
-                  } catch (error) {
-                    console.log(`获取工作流执行结果,失败:${error}`)
-                  }
-              }
-
-              resolve({ text: outputs?.text, task_id: task_id })
-            })
+            }
           } catch (e) {
             resolve({ text: `Dify工作流执行出错，${e}`, task_id: '' })
           }

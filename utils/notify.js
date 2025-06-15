@@ -1,5 +1,4 @@
 import nodemailer from "nodemailer";
-import axios from "axios";
 import env from "./env.js";
 import pkg from "../package.json" assert { type: "json" };
 
@@ -123,11 +122,14 @@ export class Notify {
       timestamp: "",
     };
 
-    return axios.post("http://www.pushplus.plus/send", config, {
+    const response = await fetch("http://www.pushplus.plus/send", {
+      method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
+      body: JSON.stringify(config),
     });
+    return response;
   }
 
   /**
@@ -146,11 +148,14 @@ export class Notify {
       channel: "9",
     };
 
-    return axios.post(`https://sctapi.ftqq.com/${token}.send`, config, {
+    const response = await fetch(`https://sctapi.ftqq.com/${token}.send`, {
+      method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
+      body: JSON.stringify(config),
     });
+    return response;
   }
 
   /**
@@ -163,12 +168,19 @@ export class Notify {
       throw new Error("未配置钉钉Webhook。");
     }
 
-    return axios.post(url, {
-      msgtype: "text",
-      text: {
-        content: `${options.content}`,
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
       },
+      body: JSON.stringify({
+        msgtype: "text",
+        text: {
+          content: `${options.content}`,
+        },
+      }),
     });
+    return response;
   }
 
   /**
@@ -181,25 +193,32 @@ export class Notify {
       throw new Error("未配置飞书Webhook。");
     }
 
-    return axios.post(url, {
-      msg_type: "interactive",
-      card: {
-        elements: [
-          {
-            tag: "markdown",
-            content: options.content,
-            text_align: "left",
-          },
-        ],
-        header: {
-          template: "blue",
-          title: {
-            content: options.title,
-            tag: "plain_text",
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        msg_type: "interactive",
+        card: {
+          elements: [
+            {
+              tag: "markdown",
+              content: options.content,
+              text_align: "left",
+            },
+          ],
+          header: {
+            template: "blue",
+            title: {
+              content: options.title,
+              tag: "plain_text",
+            },
           },
         },
-      },
+      }),
     });
+    return response;
   }
 
   /**
@@ -212,12 +231,19 @@ export class Notify {
       throw new Error("未配置企业微信Webhook。");
     }
 
-    return axios.post(url, {
-      msgtype: "text",
-      text: {
-        content: `${options.content}`,
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
       },
+      body: JSON.stringify({
+        msgtype: "text",
+        text: {
+          content: `${options.content}`,
+        },
+      }),
     });
+    return response;
   }
 
   async weixinWebhook(options) {
@@ -236,27 +262,41 @@ export class Notify {
     let res = "";
     if (env.AIBOTK_ROOM_RECIVER) {
       console.log(`微秘书推送给群组：${env.AIBOTK_CONTACT_RECIVER}`);
-      res = await axios.post(url + "/openapi/v1/chat/room", {
-        apiKey: env.AIBOTK_KEY,
-        roomName: env.AIBOTK_ROOM_RECIVER,
-        message: {
-          type: 1,
-          content: `${options.content}`,
+      res = await fetch(url + "/openapi/v1/chat/room", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
         },
+        body: JSON.stringify({
+          apiKey: env.AIBOTK_KEY,
+          roomName: env.AIBOTK_ROOM_RECIVER,
+          message: {
+            type: 1,
+            content: `${options.content}`,
+          },
+        }),
       });
-      console.log(`微秘书推送给群组结果：${res.data}`);
+              const resData = await res.json();
+        console.log(`微秘书推送给群组结果：${JSON.stringify(resData)}`);
     }
     if (env.AIBOTK_CONTACT_RECIVER) {
       console.log(`微秘书推送给好友：${env.AIBOTK_CONTACT_RECIVER}`);
-      res = await axios.post(url + "/openapi/v1/chat/contact", {
-        apiKey: env.AIBOTK_KEY,
-        name: env.AIBOTK_CONTACT_RECIVER,
-        message: {
-          type: 1,
-          content: `${options.content}`,
+      res = await fetch(url + "/openapi/v1/chat/contact", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
         },
+        body: JSON.stringify({
+          apiKey: env.AIBOTK_KEY,
+          name: env.AIBOTK_CONTACT_RECIVER,
+          message: {
+            type: 1,
+            content: `${options.content}`,
+          },
+        }),
       });
-      console.log(`微秘书推送给好友结果：${res.data}`);
+              const resData = await res.json();
+        console.log(`微秘书推送给好友结果：${JSON.stringify(resData)}`);
     }
     return res;
   }
@@ -269,8 +309,8 @@ export class Notify {
 
   async checkupdate() {
     try {
-      const result = await axios.get(pkg.releases_url);
-      const data = result.data[0];
+      const result = await fetch(pkg.releases_url);
+      const data = (await result.json())[0];
       this.newVersion.has = pkg.version < data.tag_name.replace(/^v/, "");
       this.newVersion.name = data.tag_name;
     } catch (e) {}
